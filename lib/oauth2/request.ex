@@ -20,7 +20,7 @@ defmodule OAuth2.Request do
     serializer = Client.get_serializer(client, content_type)
     body = encode_request_body(body, content_type, serializer)
     headers = process_request_headers(headers, content_type)
-    req_opts = Keyword.merge(client.request_opts, opts)
+    # req_opts = Keyword.merge(client.request_opts, opts)
     params = opts[:params] || %{}
 
     if Application.get_env(:oauth2, :debug) do
@@ -30,26 +30,26 @@ defmodule OAuth2.Request do
         method: #{inspect(method)}
         headers: #{inspect(headers)}
         body: #{inspect(body)}
-        req_opts: #{inspect(req_opts)}
       """)
     end
 
-    case Tesla.request(http_client(),
+    case Req.request(
            method: method,
            url: url,
-           query: params,
+           params: params,
            headers: headers,
-           body: body,
-           opts: [adapter: req_opts]
+           body: body
+           # opts: [adapter: req_opts]
          ) do
       {:ok, %{status: status, headers: headers, body: body}} when is_binary(body) ->
         process_body(client, status, headers, body)
 
-      {:ok, %{body: ref}} when is_reference(ref) ->
+      # %Req.Response.Async{} or something else?
+      {:ok, %{body: ref}} ->
         {:ok, ref}
 
-      {:error, reason} ->
-        {:error, %Error{reason: reason}}
+      {:error, exc} ->
+        {:error, %Error{reason: Exception.message(exc)}}
     end
   end
 
@@ -83,14 +83,6 @@ defmodule OAuth2.Request do
       {:error, error} ->
         raise error
     end
-  end
-
-  defp http_client do
-    adapter = Application.get_env(:oauth2, :adapter, Tesla.Adapter.Httpc)
-
-    middleware = Application.get_env(:oauth2, :middleware, [])
-
-    Tesla.client(middleware, adapter)
   end
 
   defp process_url(client, url) do

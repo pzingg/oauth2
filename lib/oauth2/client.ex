@@ -93,9 +93,7 @@ defmodule OAuth2.Client do
   * `params` - a map of request parameters
   * `redirect_uri` - the URI the provider should redirect to after authorization
      or token requests
-  * `request_opts` - a keyword list of request options that will be sent to the
-    `hackney` client. See the [hackney documentation] for a list of available
-    options.
+  * `request_opts` - TODO
   * `site` - the OAuth2 provider site host
   * `strategy` - a module that implements the appropriate OAuth2 strategy,
     default `OAuth2.Strategy.AuthCode`
@@ -123,8 +121,6 @@ defmodule OAuth2.Client do
       token: %OAuth2.AccessToken{access_token: "123", expires_at: nil,
       other_params: %{}, refresh_token: nil, token_type: "Bearer"},
       token_method: :post, token_url: "/oauth/token"}
-
-  [hackney documentation]: https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5
   """
   @spec new(t, Keyword.t()) :: t
   def new(client \\ %Client{}, opts) do
