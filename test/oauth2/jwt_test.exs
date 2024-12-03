@@ -6,7 +6,7 @@ defmodule OAuth2.JwtTest do
     uri = "https://bsky.social/oauth/par"
     nonce = "abcdefg"
     res = OAuth2.Jwt.dpop_create(jwk, uri, nonce)
-    assert {:ok, token, claims} = res
-    IO.inspect(claims)
+    assert {:ok, token, _claims} = res
+    assert String.starts_with?(token, "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.")
   end
 end
