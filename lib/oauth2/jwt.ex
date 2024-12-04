@@ -8,7 +8,9 @@ defmodule OAuth2.Jwt do
   def generate_jwk_es256() do
     # Generated with openssl ecparam -name prime256v1 -genkey -noout -out private-es256.key
     private_key = :jose_jwk_kty_ec.generate_key({:namedCurve, :secp256r1})
-    {{:ECPrivateKey, _vsn, pkey_oct, {:namedCurve, _oid_tuple}, point_oct, _extra}, _fields} = private_key
+
+    {{:ECPrivateKey, _vsn, pkey_oct, {:namedCurve, _oid_tuple}, point_oct, _extra}, _fields} =
+      private_key
 
     # Would like to do this, but don't know what "fields" argument should be
     # :jose_jwk_kty_ec.to_map(private_key, fields)
@@ -20,6 +22,7 @@ defmodule OAuth2.Jwt do
     d = Base.url_encode64(pkey_oct, padding: false)
     x = Base.url_encode64(x_oct, padding: false)
     y = Base.url_encode64(y_oct, padding: false)
+
     %{
       "alg" => "ES256",
       "kty" => "EC",
@@ -51,17 +54,19 @@ defmodule OAuth2.Jwt do
 
   Returns {:ok, token, claims} on success.
   """
-  def dpop_create(%{"alg" => alg} = jwk, uri, nonce \\ nil, opts \\ []) do
-    method = Keyword.get(opts, :method, "POST")
+  def dpop_create(%{"alg" => alg} = jwk_private, uri, nonce \\ nil, opts \\ []) do
+    protected =
+      %{
+        "typ" => "dpop+jwt",
+        "alg" => alg,
+        "jwk" => Map.drop(jwk_private, ["alg", "d"])
+      }
 
-    public_jwk = Map.drop(jwk, ["alg", "d"])
     extra_claims = %{
-      "typ" => "dpop+jwt",
-      "alg" => alg,
-      "jwk" => public_jwk,
-      "htm" => method,
+      "htm" => Keyword.get(opts, :method, "POST"),
       "htu" => uri
     }
+
     extra_claims =
       if is_binary(nonce) do
         Map.put(extra_claims, "nonce", nonce)
@@ -69,7 +74,16 @@ defmodule OAuth2.Jwt do
         extra_claims
       end
 
-    signer = Joken.Signer.create(alg, jwk)
-    __MODULE__.generate_and_sign(extra_claims, signer)
+    # Have to get the "protected" into the header of the JWS
+    with %{jwk: jwk, jws: jws} = Joken.Signer.create(alg, jwk_private),
+         jws = %JOSE.JWS{jws | fields: protected},
+         {:ok, claims} <- __MODULE__.generate_claims(extra_claims),
+         result <- JOSE.JWT.sign(jwk, jws, claims),
+         {_, compacted_token} <- JOSE.JWS.compact(result) do
+      {:ok, compacted_token, claims}
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, "what?"}
+    end
   end
 end

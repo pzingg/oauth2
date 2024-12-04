@@ -20,8 +20,16 @@ defmodule OAuth2.Request do
     serializer = Client.get_serializer(client, content_type)
     body = encode_request_body(body, content_type, serializer)
     headers = process_request_headers(headers, content_type)
-    # req_opts = Keyword.merge(client.request_opts, opts)
-    params = opts[:params] || %{}
+
+    opts =
+      client.request_opts
+      |> Keyword.merge(opts)
+      |> Keyword.merge(
+        url: url,
+        method: method,
+        headers: headers,
+        body: body
+      )
 
     if Application.get_env(:oauth2, :debug) do
       Logger.debug("""
@@ -33,14 +41,7 @@ defmodule OAuth2.Request do
       """)
     end
 
-    case Req.request(
-           method: method,
-           url: url,
-           params: params,
-           headers: headers,
-           body: body
-           # opts: [adapter: req_opts]
-         ) do
+    case Req.request(opts) do
       {:ok, %{status: status, headers: headers, body: body}} when is_binary(body) ->
         process_body(client, status, headers, body)
 

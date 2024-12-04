@@ -50,6 +50,7 @@ defmodule OAuth2.Client do
 
   @type t :: %Client{
           authorize_url: authorize_url,
+          pushed_authorization_url: authorize_url,
           client_id: client_id,
           client_secret: client_secret,
           headers: headers,
@@ -66,6 +67,7 @@ defmodule OAuth2.Client do
         }
 
   defstruct authorize_url: "/oauth/authorize",
+            pushed_authorization_url: nil,
             client_id: "",
             client_secret: "",
             headers: [],
@@ -93,7 +95,7 @@ defmodule OAuth2.Client do
   * `params` - a map of request parameters
   * `redirect_uri` - the URI the provider should redirect to after authorization
      or token requests
-  * `request_opts` - TODO
+  * `request_opts` - `raw: true`, etc.
   * `site` - the OAuth2 provider site host
   * `strategy` - a module that implements the appropriate OAuth2 strategy,
     default `OAuth2.Strategy.AuthCode`
