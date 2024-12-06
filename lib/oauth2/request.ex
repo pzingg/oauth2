@@ -41,12 +41,12 @@ defmodule OAuth2.Request do
       """)
     end
 
-    case Req.request(opts) do
-      {:ok, %{status: status, headers: headers, body: body}} when is_binary(body) ->
+    case Req.request(opts, decode_body: false) do
+      {:ok, %Req.Response{status: status, headers: headers, body: body}} when is_binary(body) ->
         process_body(client, status, headers, body)
 
-      # %Req.Response.Async{} or something else?
-      {:ok, %{body: ref}} ->
+      # %Req.Response.Async{} or decoded map
+      {:ok, %Req.Response{body: ref}} ->
         {:ok, ref}
 
       {:error, exc} ->
@@ -94,16 +94,19 @@ defmodule OAuth2.Request do
     end
   end
 
-  defp process_body(client, status, headers, body) when is_binary(body) do
+  def process_body(client, status, headers, body) when is_binary(body) do
     resp = Response.new(client, status, headers, body)
 
-    case status do
-      status when status in 200..399 ->
+    cond do
+      "error" in resp.body ->
+        {:error, resp}
+
+      is_integer(status) && status in 200..399 ->
         {:ok, resp}
 
-      status when status in 400..599 ->
+      true ->
         {:error, resp}
-    end
+      end
   end
 
   defp req_headers(%Client{token: nil} = client, headers),

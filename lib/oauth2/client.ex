@@ -361,7 +361,11 @@ defmodule OAuth2.Client do
   """
   @spec basic_auth(t) :: t
   def basic_auth(%OAuth2.Client{client_id: id, client_secret: secret} = client) do
-    put_header(client, "authorization", "Basic " <> Base.encode64(id <> ":" <> secret))
+    if is_binary(secret) && secret != "" do
+      put_header(client, "authorization", "Basic " <> Base.encode64(id <> ":" <> secret))
+    else
+      client
+    end
   end
 
   @doc """
