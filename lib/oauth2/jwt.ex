@@ -5,6 +5,12 @@ defmodule OAuth2.Jwt do
 
   use Joken.Config
 
+  require Logger
+
+  @type jwk_key() :: binary()
+  @type jwk_map() :: %{required(jwk_key()) => binary()}
+
+  @spec generate_jwk_es256() :: jwk_map()
   def generate_jwk_es256() do
     # Generated with openssl ecparam -name prime256v1 -genkey -noout -out private-es256.key
     private_key = :jose_jwk_kty_ec.generate_key({:namedCurve, :secp256r1})
@@ -48,42 +54,77 @@ defmodule OAuth2.Jwt do
   @doc """
   Creates a DPoP token. If a nonce is supplied, it is added to the token's claims.
 
-  `jwk` - A JWK with a private key. The `alg` of the JWK should be "ES256" (NIST "P-256")
-    for use with Bluesky.
-  `opts` - A keyword list. `:method` overrides the default "POST" method.
+  - `jwk` - A JWK (Elixir map) with a private key. For Bluesky, the `alg` of the JWK
+    should be "ES256" (NIST "P-256" curve).
+  - `opts` - A keyword list:
+    - `:nonce` (optional) - a nonce claim to be added
+    - `:method` (optional, default `:post`) - `:get` or `:post`
 
   Returns {:ok, token, claims} on success.
   """
-  def dpop_create(%{"alg" => alg} = jwk_private, uri, nonce \\ nil, opts \\ []) do
-    protected =
-      %{
-        "typ" => "dpop+jwt",
-        "alg" => alg,
-        "jwk" => Map.drop(jwk_private, ["alg", "d"])
+
+  @spec dpop_create(jwk_map() | nil, String.t(), Keyword.t()) ::
+          {:ok, binary(), map()} | {:error, String.t()}
+  def dpop_create(jwk_private, url, opts \\ [])
+
+  def dpop_create(jwk_private, url, opts) do
+    if private_key?(jwk_private) do
+      # TODO Verify getting public key from private key types other than ES256
+      alg = Map.fetch!(jwk_private, "alg")
+      jwk_public = Map.drop(jwk_private, ["alg", "d"])
+
+      protected =
+        %{
+          "typ" => "dpop+jwt",
+          "alg" => alg,
+          "jwk" => jwk_public
+        }
+
+      method = Keyword.get(opts, :method, :post)
+
+      extra_claims = %{
+        "htm" => Atom.to_string(method) |> String.upcase(:ascii),
+        "htu" => url
       }
 
-    extra_claims = %{
-      "htm" => Keyword.get(opts, :method, "POST"),
-      "htu" => uri
-    }
+      nonce = Keyword.get(opts, :nonce)
 
-    extra_claims =
-      if is_binary(nonce) do
-        Map.put(extra_claims, "nonce", nonce)
+      extra_claims =
+        if is_binary(nonce) do
+          Map.put(extra_claims, "nonce", nonce)
+        else
+          extra_claims
+        end
+
+      with %{jwk: jwk, jws: jws} = Joken.Signer.create(alg, jwk_private),
+           jws = %JOSE.JWS{jws | fields: protected},
+           {:ok, claims} <- __MODULE__.generate_claims(extra_claims),
+           result <- JOSE.JWT.sign(jwk, jws, claims),
+           {_, compacted_token} <- JOSE.JWS.compact(result) do
+        {:ok, compacted_token, claims}
       else
-        extra_claims
+        {:error, reason} -> {:error, reason}
+        _ -> {:error, "JWK dpop error"}
       end
-
-    # Have to get the "protected" into the header of the JWS
-    with %{jwk: jwk, jws: jws} = Joken.Signer.create(alg, jwk_private),
-         jws = %JOSE.JWS{jws | fields: protected},
-         {:ok, claims} <- __MODULE__.generate_claims(extra_claims),
-         result <- JOSE.JWT.sign(jwk, jws, claims),
-         {_, compacted_token} <- JOSE.JWS.compact(result) do
-      {:ok, compacted_token, claims}
     else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, "what?"}
+      {:error, "A private JWK is required"}
     end
   end
+
+  def dpop_create(_jwk_private, _url, _nonce, _opts) do
+    {:error, "A private JWK is required"}
+  end
+
+  # TODO Verify for types other than ES256
+  def private_key?(%{"alg" => "ES256", "d" => d}) when is_binary(d), do: true
+
+  def private_key?(%{"alg" => alg}) when is_binary(alg) do
+    if alg != "ES256" do
+      Logger.error("Unsupported JWK alg #{alg}")
+    end
+
+    false
+  end
+
+  def private_key?(_), do: false
 end

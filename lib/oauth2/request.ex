@@ -42,8 +42,8 @@ defmodule OAuth2.Request do
     end
 
     case Req.request(opts, decode_body: false) do
-      {:ok, %Req.Response{status: status, headers: headers, body: body}} when is_binary(body) ->
-        process_body(client, status, headers, body)
+      {:ok, %Req.Response{status: status, headers: resp_headers, body: body}} when is_binary(body) ->
+        process_body(client, status, resp_headers, body)
 
       # %Req.Response.Async{} or decoded map
       {:ok, %Req.Response{body: ref}} ->

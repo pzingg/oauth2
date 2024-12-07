@@ -12,12 +12,14 @@ defmodule OAuth2.AccessToken do
 
   alias OAuth2.AccessToken
 
-  @standard ["access_token", "refresh_token", "expires_in", "token_type"]
+  @standard ["access_token", "refresh_token", "expires_in", "token_type", "scope", "sub"]
 
   @type access_token :: binary
   @type refresh_token :: binary | nil
   @type expires_at :: integer
   @type token_type :: binary
+  @type scope :: binary
+  @type sub :: binary
   @type other_params :: %{binary => binary}
   @type body :: binary | map | list
 
@@ -26,6 +28,8 @@ defmodule OAuth2.AccessToken do
           refresh_token: refresh_token,
           expires_at: expires_at,
           token_type: token_type,
+          scope: scope,
+          subject: sub,
           other_params: other_params
         }
 
@@ -33,6 +37,8 @@ defmodule OAuth2.AccessToken do
             refresh_token: nil,
             expires_at: nil,
             token_type: "Bearer",
+            scope: nil,
+            subject: nil,
             other_params: %{}
 
   @doc """
@@ -45,10 +51,10 @@ defmodule OAuth2.AccessToken do
   ### Example
 
       iex> OAuth2.AccessToken.new("abc123")
-      %OAuth2.AccessToken{access_token: "abc123", expires_at: nil, other_params: %{}, refresh_token: nil, token_type: "Bearer"}
+      %OAuth2.AccessToken{access_token: "abc123", expires_at: nil, other_params: %{}, refresh_token: nil, scope: nil, subject: nil, token_type: "Bearer"}
 
       iex> OAuth2.AccessToken.new(%{"access_token" => "abc123"})
-      %OAuth2.AccessToken{access_token: "abc123", expires_at: nil, other_params: %{}, refresh_token: nil, token_type: "Bearer"}
+      %OAuth2.AccessToken{access_token: "abc123", expires_at: nil, other_params: %{}, refresh_token: nil, scope: nil, subject: nil, token_type: "Bearer"}
   """
   @spec new(binary) :: t
   def new(token) when is_binary(token) do
@@ -64,6 +70,8 @@ defmodule OAuth2.AccessToken do
       refresh_token: std["refresh_token"],
       expires_at: (std["expires_in"] || other["expires"]) |> expires_at,
       token_type: std["token_type"] |> normalize_token_type(),
+      scope: std["scope"],
+      subject: std["sub"],
       other_params: other
     )
   end
