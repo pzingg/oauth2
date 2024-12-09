@@ -70,7 +70,7 @@ defmodule OAuth2.Client do
           token_url: token_url,
           par_url: par_url,
           subject: subject,
-          dpop_private_jwk: OAuth2.JWT.jwk_map(),
+          dpop_private_jwk: OAuth2.JWK.jwk_map(),
           dpop_nonce: nonce
         }
 
