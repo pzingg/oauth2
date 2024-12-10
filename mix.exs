@@ -9,7 +9,7 @@ defmodule OAuth2.Mixfile do
       app: :oauth2,
       name: "OAuth2",
       version: @version,
-      elixir: "~> 1.2",
+      elixir: "~> 1.17",
       deps: deps(),
       package: package(),
       description: description(),
@@ -27,7 +27,7 @@ defmodule OAuth2.Mixfile do
   end
 
   def application do
-    [extra_applications: [:logger]]
+    [extra_applications: [:logger, :public_key]]
   end
 
   defp dialyzer do
@@ -38,18 +38,18 @@ defmodule OAuth2.Mixfile do
 
   defp deps do
     [
-      {:tesla, "~> 1.5"},
+      {:req, "~> 0.5"},
+      {:ssl_verify_fun, "~> 1.1.7", manager: :rebar3, override: true},
+      {:jose, "~> 1.11"},
 
       # Test dependencies
-      {:hackney, "~> 1.17", only: [:dev, :test]},
-      {:jason, "~> 1.0", only: [:dev, :test]},
       {:bypass, "~> 0.9", only: :test},
       {:plug_cowboy, "~> 1.0", only: :test},
 
       # Tools
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:dialyxir, ">= 0.0.0", only: [:dev], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
+      # {:dialyxir, ">= 0.0.0", only: [:dev], runtime: false},
+      # {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
       {:excoveralls, ">= 0.0.0", only: [:test], runtime: false}
     ]
   end

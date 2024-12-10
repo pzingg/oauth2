@@ -29,6 +29,8 @@ defmodule OAuth2.Client do
       response = OAuth2.Client.post!(client, "/some/other/resources", %{foo: "bar"})
   """
 
+  require Logger
+
   alias OAuth2.{AccessToken, Client, Error, Request, Response}
 
   @type authorize_url :: binary
@@ -47,6 +49,9 @@ defmodule OAuth2.Client do
   @type token :: AccessToken.t() | nil
   @type token_method :: :post | :get | atom
   @type token_url :: binary
+  @type par_url :: binary | nil
+  @type subject :: binary | nil
+  @type nonce :: binary | nil
 
   @type t :: %Client{
           authorize_url: authorize_url,
@@ -62,7 +67,11 @@ defmodule OAuth2.Client do
           strategy: strategy,
           token: token,
           token_method: token_method,
-          token_url: token_url
+          token_url: token_url,
+          par_url: par_url,
+          subject: subject,
+          dpop_private_jwk: OAuth2.JWK.jwk_map(),
+          dpop_nonce: nonce
         }
 
   defstruct authorize_url: "/oauth/authorize",
@@ -78,7 +87,11 @@ defmodule OAuth2.Client do
             strategy: OAuth2.Strategy.AuthCode,
             token: nil,
             token_method: :post,
-            token_url: "/oauth/token"
+            token_url: "/oauth/token",
+            par_url: nil,
+            subject: nil,
+            dpop_private_jwk: nil,
+            dpop_nonce: nil
 
   @doc """
   Builds a new `OAuth2.Client` struct using the `opts` provided.
@@ -92,11 +105,10 @@ defmodule OAuth2.Client do
   * `headers` - a list of request headers
   * `params` - a map of request parameters
   * `redirect_uri` - the URI the provider should redirect to after authorization
-     or token requests
-  * `request_opts` - a keyword list of request options that will be sent to the
-    `hackney` client. See the [hackney documentation] for a list of available
-    options.
-  * `site` - the OAuth2 provider site host
+    or token requests
+  * `request_opts` - a keyword list of options passed to the Req module,
+    e.g. `:raw` `:decode_body`, etc.
+  * `site` - the OAuth2 provider site host (also known as "issuer")
   * `strategy` - a module that implements the appropriate OAuth2 strategy,
     default `OAuth2.Strategy.AuthCode`
   * `token` - `%OAuth2.AccessToken{}` struct holding the token for requests.
@@ -104,6 +116,12 @@ defmodule OAuth2.Client do
     Defaults to `:post`
   * `token_url` - absolute or relative URL path to the token endpoint.
     Defaults to `"/oauth/token"`
+  * `par_url` - absolute or relative URL path to the pushed authentication
+    request endpoint. Defaults to `"/oauth/par"`
+  * `subject` - when authenticated, set to the authenticated user's ID
+  * `dpop_private_jwk` - a JWK used to create DPoP proofs
+  * `dpop_nonce` - holds the last nonce sent by the client or authentication
+    server.
 
   ## Example
 
@@ -123,8 +141,6 @@ defmodule OAuth2.Client do
       token: %OAuth2.AccessToken{access_token: "123", expires_at: nil,
       other_params: %{}, refresh_token: nil, token_type: "Bearer"},
       token_method: :post, token_url: "/oauth/token"}
-
-  [hackney documentation]: https://github.com/benoitc/hackney/blob/master/doc/hackney.md#request5
   """
   @spec new(t, Keyword.t()) :: t
   def new(client \\ %Client{}, opts) do
@@ -277,7 +293,18 @@ defmodule OAuth2.Client do
     case Request.request(method, client, url, client.params, client.headers, opts) do
       {:ok, response} ->
         token = AccessToken.new(response.body)
-        {:ok, %{client | headers: [], params: %{}, token: token}}
+
+        if Application.get_env(:oauth2, :debug) do
+          Logger.debug("Received access token #{inspect(token)}")
+        end
+
+        client = %{client | headers: [], params: %{}, token: token}
+
+        if is_binary(token.subject) do
+          {:ok, %{client | subject: token.subject}}
+        else
+          {:ok, client}
+        end
 
       {:error, error} ->
         {:error, error}
@@ -359,11 +386,15 @@ defmodule OAuth2.Client do
   end
 
   @doc """
-  Adds `authorization` header for basic auth.
+  Adds an `authorization: Basic` header if client has a client secret.
   """
   @spec basic_auth(t) :: t
   def basic_auth(%OAuth2.Client{client_id: id, client_secret: secret} = client) do
-    put_header(client, "authorization", "Basic " <> Base.encode64(id <> ":" <> secret))
+    if is_binary(secret) && secret != "" do
+      put_header(client, "authorization", "Basic " <> Base.encode64(id <> ":" <> secret))
+    else
+      client
+    end
   end
 
   @doc """

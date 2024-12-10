@@ -20,8 +20,16 @@ defmodule OAuth2.Request do
     serializer = Client.get_serializer(client, content_type)
     body = encode_request_body(body, content_type, serializer)
     headers = process_request_headers(headers, content_type)
-    req_opts = Keyword.merge(client.request_opts, opts)
-    params = opts[:params] || %{}
+
+    opts =
+      client.request_opts
+      |> Keyword.merge(opts)
+      |> Keyword.merge(
+        url: url,
+        method: method,
+        headers: headers,
+        body: body
+      )
 
     if Application.get_env(:oauth2, :debug) do
       Logger.debug("""
@@ -30,26 +38,19 @@ defmodule OAuth2.Request do
         method: #{inspect(method)}
         headers: #{inspect(headers)}
         body: #{inspect(body)}
-        req_opts: #{inspect(req_opts)}
       """)
     end
 
-    case Tesla.request(http_client(),
-           method: method,
-           url: url,
-           query: params,
-           headers: headers,
-           body: body,
-           opts: [adapter: req_opts]
-         ) do
-      {:ok, %{status: status, headers: headers, body: body}} when is_binary(body) ->
-        process_body(client, status, headers, body)
+    case Req.request(opts, decode_body: false) do
+      {:ok, %Req.Response{status: status, headers: resp_headers, body: body}} when is_binary(body) ->
+        process_body(client, status, resp_headers, body)
 
-      {:ok, %{body: ref}} when is_reference(ref) ->
+      # %Req.Response.Async{} or decoded map
+      {:ok, %Req.Response{body: ref}} ->
         {:ok, ref}
 
-      {:error, reason} ->
-        {:error, %Error{reason: reason}}
+      {:error, exc} ->
+        {:error, %Error{reason: Exception.message(exc)}}
     end
   end
 
@@ -85,14 +86,6 @@ defmodule OAuth2.Request do
     end
   end
 
-  defp http_client do
-    adapter = Application.get_env(:oauth2, :adapter, Tesla.Adapter.Httpc)
-
-    middleware = Application.get_env(:oauth2, :middleware, [])
-
-    Tesla.client(middleware, adapter)
-  end
-
   defp process_url(client, url) do
     case String.downcase(url) do
       <<"http://"::utf8, _::binary>> -> url
@@ -101,16 +94,19 @@ defmodule OAuth2.Request do
     end
   end
 
-  defp process_body(client, status, headers, body) when is_binary(body) do
+  def process_body(client, status, headers, body) when is_binary(body) do
     resp = Response.new(client, status, headers, body)
 
-    case status do
-      status when status in 200..399 ->
+    cond do
+      "error" in resp.body ->
+        {:error, resp}
+
+      is_integer(status) && status in 200..399 ->
         {:ok, resp}
 
-      status when status in 400..599 ->
+      true ->
         {:error, resp}
-    end
+      end
   end
 
   defp req_headers(%Client{token: nil} = client, headers),

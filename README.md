@@ -48,25 +48,12 @@ end
 Please see the documentation for [OAuth2.Serializer](https://hexdocs.pm/oauth2/OAuth2.Serializer.html)
 for more details.
 
-## Configure a http client
+## Req http client
 
-The http client library used is [tesla](https://github.com/elixir-tesla/tesla), the default adapter is
-Httpc, since it comes out of the box with every Erlang instance but you can easily change it to something
-better.
-You can configure another adaptor like this:
+The http client library used is [Req](https://github.com/wojtekmach/req). By default, Req uses 
+[Finch](https://github.com/sneako/finch) as the http adapter, via the [run_finch](https://hexdocs.pm/req/Req.Steps.html#run_finch/1) step.
 
-```elixir
-config :oauth2, adapter: Tesla.Adapter.Mint
-```
-
-You can also add your own tesla middleware:
-
-```elixir
-config :oauth2, middleware: [
-  Tesla.Middleware.Retry,
-  {Tesla.Middleware.Fuse, name: :example}
-]
-```
+Req works by running the request struct through these steps. You can easily reuse or rearrange built-in steps or write new ones. Importantly, steps are just regular functions. Custom steps can be packaged into plugins so that they are even easier to use by others. See [Related Packages](https://github.com/wojtekmach/req?tab=readme-ov-file#related-packages).
 
 ## Debug mode
 

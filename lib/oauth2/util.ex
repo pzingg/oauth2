@@ -10,13 +10,13 @@ defmodule OAuth2.Util do
   @spec content_type([{binary, binary}]) :: binary
   def content_type(headers) do
     case get_content_type(headers) do
-      {_, content_type} ->
-        content_type
-        |> remove_params
-        |> parse_content_type
-
       nil ->
         "application/json"
+
+      content_type ->
+        content_type
+        |> remove_params()
+        |> parse_content_type()
     end
   end
 
@@ -36,6 +36,10 @@ defmodule OAuth2.Util do
   end
 
   defp get_content_type(headers) do
-    List.keyfind(headers, "content-type", 0)
+    case List.keyfind(headers, "content-type", 0) do
+      {_, value} when is_binary(value) -> value
+      {_, [value | _]} when is_binary(value) -> value
+      _ -> nil
+    end
   end
 end

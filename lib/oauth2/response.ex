@@ -26,12 +26,18 @@ defmodule OAuth2.Response do
 
   defstruct status_code: nil, headers: [], body: nil
 
+  @type serializer_fn :: (binary -> module | nil)
+
   @doc false
-  @spec new(Client.t(), integer, headers, body) :: t
+  @spec new(Client.t() | serializer_fn, integer, headers, body) :: t
   def new(client, code, headers, body) do
     headers = process_headers(headers)
     content_type = content_type(headers)
-    serializer = Client.get_serializer(client, content_type)
+    serializer =
+      case client do
+        %Client{} -> Client.get_serializer(client, content_type)
+        fun -> fun.(content_type)
+      end
     body = decode_response_body(body, content_type, serializer)
     resp = %__MODULE__{status_code: code, headers: headers, body: body}
 

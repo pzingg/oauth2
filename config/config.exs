@@ -12,5 +12,5 @@ config :oauth2,
   middleware: []
 
 if Mix.env() == :test do
-  config :oauth2, adapter: Tesla.Adapter.Hackney
+  # TODO config :oauth2, adapter: Tesla.Adapter.Hackney
 end
