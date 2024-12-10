@@ -386,7 +386,7 @@ defmodule OAuth2.Client do
   end
 
   @doc """
-  Adds `authorization` header for basic auth.
+  Adds an `authorization: Basic` header if client has a client secret.
   """
   @spec basic_auth(t) :: t
   def basic_auth(%OAuth2.Client{client_id: id, client_secret: secret} = client) do
