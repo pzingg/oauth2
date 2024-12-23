@@ -2,7 +2,7 @@ defmodule OAuth2.Mixfile do
   use Mix.Project
 
   @source_url "https://github.com/scrogson/oauth2"
-  @version "2.1.0"
+  @version "2.2.0"
 
   def project do
     [
@@ -39,11 +39,11 @@ defmodule OAuth2.Mixfile do
   defp deps do
     [
       {:req, "~> 0.5"},
+      {:finch, "~> 0.19"},
       {:ssl_verify_fun, "~> 1.1.7", manager: :rebar3, override: true},
       {:jose, "~> 1.11"},
 
       # Test dependencies
-      {:bypass, "~> 0.9", only: :test},
       {:plug_cowboy, "~> 1.0", only: :test},
 
       # Tools

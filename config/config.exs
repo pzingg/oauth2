@@ -10,7 +10,3 @@ config :oauth2,
   redirect_uri: "http://example.com/auth/callback",
   request_opts: [],
   middleware: []
-
-if Mix.env() == :test do
-  # TODO config :oauth2, adapter: Tesla.Adapter.Hackney
-end

@@ -7,9 +7,8 @@ defmodule OAuth2.Strategy.ClientCredentialsTest do
   import OAuth2.TestHelpers
 
   setup do
-    server = Bypass.open()
-    client = build_client(strategy: ClientCredentials, site: bypass_server(server))
-    {:ok, client: client, server: server}
+    client = build_client(strategy: ClientCredentials, site: test_server())
+    {:ok, client: client}
   end
 
   test "authorize_url", %{client: client} do
@@ -25,8 +24,9 @@ defmodule OAuth2.Strategy.ClientCredentialsTest do
     assert client.params["grant_type"] == "client_credentials"
   end
 
-  test "get_token: Duplicated auth_header ", %{client: client, server: server} do
-    Bypass.expect(server, fn conn ->
+  test "get_token: Duplicated auth_header ", context do
+    {client, stub_name} = test_client(context, :client)
+    req_stub(stub_name, "POST", "/oauth/token", fn conn ->
       base64 = Base.encode64(client.client_id <> ":" <> client.client_secret)
       assert get_req_header(conn, "authorization") == ["Basic #{base64}"]
 

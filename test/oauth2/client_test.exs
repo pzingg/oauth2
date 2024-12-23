@@ -5,26 +5,25 @@ defmodule OAuth2.ClientTest do
 
   import OAuth2.Client
   import OAuth2.TestHelpers
+  alias OAuth2.AsyncAgent
 
   alias OAuth2.Client
   alias OAuth2.Response
 
   setup do
-    server = Bypass.open()
-    client = build_client(site: bypass_server(server))
+    client = build_client(site: test_server())
     client_with_token = tokenize_client(client)
-    async_client = async_client(client)
     basic_auth = Base.encode64(client.client_id <> ":" <> client.client_secret)
 
     {:ok,
      basic_auth: basic_auth,
      client: client,
-     server: server,
-     client_with_token: client_with_token,
-     async_client: async_client}
+     client_with_token: client_with_token
+    }
   end
 
-  test "authorize_url!", %{client: client, server: server} do
+  test "authorize_url!", %{client: client} do
+    server = URI.parse(test_server())
     uri = URI.parse(authorize_url!(client))
     assert "#{uri.scheme}://#{uri.host}:#{uri.port}" == client.site
     assert uri.port == server.port
@@ -36,8 +35,9 @@ defmodule OAuth2.ClientTest do
     assert query["response_type"] == "code"
   end
 
-  test "get_token, get_token!", %{client: client, server: server} do
-    bypass(server, "POST", "/oauth/token", fn conn ->
+  test "get_token, get_token!", context do
+    {client, stub_name} = test_client(context, :client)
+    req_stub(stub_name, "POST", "/oauth/token", fn conn ->
       assert conn.query_string == ""
       assert get_req_header(conn, "accept") == ["application/json"]
 
@@ -50,10 +50,11 @@ defmodule OAuth2.ClientTest do
     assert %Client{} = Client.get_token!(client, code: "code1234")
   end
 
-  test "get_token, get_token! when `:token_method` is `:get`", %{client: client, server: server} do
+  test "get_token, get_token! when `:token_method` is `:get`", context do
+    {client, stub_name} = test_client(context, :client)
     client = %{client | token_method: :get}
 
-    bypass(server, "GET", "/oauth/token", fn conn ->
+    req_stub(stub_name, "GET", "/oauth/token", fn conn ->
       refute conn.query_string == ""
       assert get_req_header(conn, "accept") == ["application/json"]
       assert conn.query_params["code"] == "code1234"
@@ -67,10 +68,11 @@ defmodule OAuth2.ClientTest do
     assert token.access_token == "test1234"
   end
 
-  test "get_token, get_token! when response error", %{client: client, server: server} do
+  test "get_token, get_token! when response error", context do
+    {client, stub_name} = test_client(context, :client)
     code = [code: "code1234"]
 
-    bypass(server, "POST", "/oauth/token", fn conn ->
+    req_stub(stub_name, "POST", "/oauth/token", fn conn ->
       assert conn.query_string == ""
       assert get_req_header(conn, "accept") == ["application/json"]
       send_resp(conn, 500, ~s({"error":"missing_client_id"}))
@@ -85,12 +87,11 @@ defmodule OAuth2.ClientTest do
     end
   end
 
-  test "refresh_token and refresh_token! with a POST", %{
-    basic_auth: base64,
-    server: server,
-    client_with_token: client
-  } do
-    bypass(server, "POST", "/oauth/token", fn conn ->
+  test "refresh_token and refresh_token! with a POST", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+    base64 = context[:basic_auth]
+
+    req_stub(stub_name, "POST", "/oauth/token", fn conn ->
       assert get_req_header(conn, "authorization") == ["Basic #{base64}"]
       assert get_req_header(conn, "accept") == ["application/json"]
       assert get_req_header(conn, "content-type") == ["application/x-www-form-urlencoded"]
@@ -121,12 +122,11 @@ defmodule OAuth2.ClientTest do
     assert client_b.token.refresh_token == "new-refresh-token"
   end
 
-  test "refresh token when response missing refresh_token", %{
-    basic_auth: base64,
-    server: server,
-    client_with_token: client
-  } do
-    bypass(server, "POST", "/oauth/token", fn conn ->
+  test "refresh token when response missing refresh_token", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+    base64 = context[:basic_auth]
+
+    req_stub(stub_name, "POST", "/oauth/token", fn conn ->
       assert get_req_header(conn, "authorization") == ["Basic #{base64}"]
       assert get_req_header(conn, "accept") == ["application/json"]
       assert get_req_header(conn, "content-type") == ["application/x-www-form-urlencoded"]
@@ -177,8 +177,10 @@ defmodule OAuth2.ClientTest do
 
   ## GET
 
-  test "GET", %{server: server, client_with_token: client} do
-    bypass(server, "GET", "/api/user/1", [token: client.token], fn conn ->
+  test "GET", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "GET", "/api/user/1", [token: client.token], fn conn ->
       json(conn, 200, %{id: 1})
     end)
 
@@ -191,25 +193,39 @@ defmodule OAuth2.ClientTest do
     assert result.body["id"] == 1
   end
 
-  test "GET with async options", %{server: server, async_client: client} do
-    body = :binary.copy("a", 8000)
+  test "GET with async options", context do
+    {client, stub_name} = test_client(context, :client)
 
-    bypass(server, "GET", "/api/user/1", [token: client.token], fn conn ->
+    # We have to use a collectible function until Req releases
+    # [into: :self] request option
+    AsyncAgent.start_link(:async_test)
+
+    client = async_client(client, fn {:data, data}, {req, resp} ->
+      AsyncAgent.append(:async_test, data)
+      {:cont, {req, resp}}
+    end)
+
+    body = :binary.copy("a", 7999) <> "b"
+
+    req_stub(stub_name, "GET", "/api/user/1", [token: client.token], fn conn ->
       send_resp(conn, 200, body)
     end)
 
-    {:ok, ref} = Client.get(client, "/api/user/1")
+    {:ok, _resp} = Client.get(client, "/api/user/1")
 
-    resp_body = stream(ref)
+    resp_body = AsyncAgent.to_string(:async_test)
     assert resp_body == body
   end
 
-  test "GET with with_body: true", %{server: server, client_with_token: client} do
-    bypass(server, "GET", "/api/user/1", [token: client.token], fn conn ->
+  test "GET with with_body: true", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "GET", "/api/user/1", [token: client.token], fn conn ->
       json(conn, 200, %{id: 1})
     end)
 
-    {:ok, result} = Client.get(client, "/api/user/1", [], with_body: true)
+    # with_body: true
+    {:ok, result} = Client.get(client, "/api/user/1", [])
     assert result.status_code == 200
     assert result.body["id"] == 1
 
@@ -218,22 +234,13 @@ defmodule OAuth2.ClientTest do
     assert result.body["id"] == 1
   end
 
-  defp stream(ref, buffer \\ []) do
-    receive do
-      {:hackney_response, ^ref, :done} ->
-        IO.iodata_to_binary(buffer)
-
-      {:hackney_response, ^ref, binary} ->
-        stream(ref, buffer ++ [binary])
-    end
-  end
-
   ## POST
 
-  test "POST", %{server: server, client_with_token: client} do
+  test "POST", context do
+    {client, stub_name} = test_client(context, :client_with_token)
     title = "Totally awesome blog post"
 
-    bypass(server, "POST", "/api/posts", [token: client.token], fn conn ->
+    req_stub(stub_name, "POST", "/api/posts", [token: client.token], fn conn ->
       json(conn, 200, %{id: 1, title: title})
     end)
 
@@ -250,10 +257,11 @@ defmodule OAuth2.ClientTest do
 
   ## PUT
 
-  test "PUT", %{server: server, client_with_token: client} do
+  test "PUT", context do
+    {client, stub_name} = test_client(context, :client_with_token)
     title = "Totally awesome blog post!"
 
-    bypass(server, "PUT", "/api/posts/1", [token: client.token], fn conn ->
+    req_stub(stub_name, "PUT", "/api/posts/1", [token: client.token], fn conn ->
       json(conn, 200, %{id: 1, title: title})
     end)
 
@@ -270,10 +278,11 @@ defmodule OAuth2.ClientTest do
 
   ## PATCH
 
-  test "PATCH", %{server: server, client_with_token: client} do
+  test "PATCH", context do
+    {client, stub_name} = test_client(context, :client_with_token)
     title = "Totally awesome blog post!"
 
-    bypass(server, "PATCH", "/api/posts/1", [token: client.token], fn conn ->
+    req_stub(stub_name, "PATCH", "/api/posts/1", [token: client.token], fn conn ->
       json(conn, 200, %{id: 1, title: title})
     end)
 
@@ -290,8 +299,10 @@ defmodule OAuth2.ClientTest do
 
   ## DELETE
 
-  test "DELETE", %{server: server, client_with_token: client} do
-    bypass(server, "DELETE", "/api/posts/1", [token: client.token], fn conn ->
+  test "DELETE", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "DELETE", "/api/posts/1", [token: client.token], fn conn ->
       json(conn, 204, "")
     end)
 
@@ -304,8 +315,10 @@ defmodule OAuth2.ClientTest do
     assert result.body == ""
   end
 
-  test "params in opts turn into a query string", %{server: server, client_with_token: client} do
-    Bypass.expect(server, fn conn ->
+  test "params in opts turn into a query string", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "GET", "/me", fn conn ->
       assert conn.query_string == "access_token=#{client.token.access_token}"
       send_resp(conn, 200, "")
     end)
@@ -314,15 +327,17 @@ defmodule OAuth2.ClientTest do
              Client.get(client, "/me", [], params: [access_token: client.token.access_token])
   end
 
-  test "follow redirects", %{server: server, client_with_token: client} do
-    Bypass.expect(server, fn conn ->
-      case conn.path_info do
-        ["old"] ->
+  test "follow redirects", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "GET", nil, fn conn ->
+      case conn.request_path do
+        "/old" ->
           conn
-          |> put_resp_header("location", "http://localhost:#{server.port}/new")
+          |> put_resp_header("location", "#{test_server()}/new")
           |> send_resp(302, "")
 
-        ["new"] ->
+        "/new" ->
           conn
           |> put_resp_content_type("text/html")
           |> send_resp(200, "ok")
@@ -332,12 +347,14 @@ defmodule OAuth2.ClientTest do
     assert {:ok, %{body: "ok", status_code: 200}} =
              Client.get(client, "/old", [],
                params: [access_token: client.token.access_token],
-               follow_redirect: true
+               redirect: true
              )
   end
 
-  test "get returning 401 with no content", %{server: server, client_with_token: client} do
-    bypass(server, "GET", "/api/user", [token: client.token], fn conn ->
+  test "get returning 401 with no content", context do
+    {client, stub_name} = test_client(context, :client_with_token)
+
+    req_stub(stub_name, "GET", "/api/user", [token: client.token], fn conn ->
       conn
       |> put_resp_header("content-type", "text/html")
       |> send_resp(401, " ")
@@ -348,8 +365,10 @@ defmodule OAuth2.ClientTest do
     assert result.body == ""
   end
 
-  test "bang functions raise errors", %{server: server, client: client} do
-    Bypass.expect(server, fn conn ->
+  test "bang functions raise errors", context do
+    {client, stub_name} = test_client(context, :client)
+
+    req_stub(stub_name, "GET", "/api/error", fn conn ->
       json(conn, 400, %{error: "error"})
     end)
 
@@ -358,13 +377,11 @@ defmodule OAuth2.ClientTest do
     end
   end
 
-  test "connection error", %{server: server, client_with_token: client} do
-    Bypass.down(server)
+  test "connection error", %{client_with_token: %{request_opts: req_opts} = client} do
+    client = %Client{client | request_opts: Keyword.put(req_opts, :retry, false)}
 
     assert_raise OAuth2.Error, "Connection refused", fn ->
       Client.get!(client, "/api/error")
     end
-
-    Bypass.up(server)
   end
 end

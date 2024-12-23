@@ -3,28 +3,33 @@ defmodule OAuth2.TestHelpers do
   import Plug.Conn
   import ExUnit.Assertions
 
-  def bypass_server(%Bypass{port: port}) do
-    "http://localhost:#{port}"
+  def test_server do
+    "http://localhost:4002"
   end
 
-  def bypass(server, method, path, fun) do
-    bypass(server, method, path, [], fun)
-  end
+  def req_stub(name, method, path, fun), do: req_stub(name, method, path, [], fun)
 
-  def bypass(server, method, path, opts, fun) do
-    {token, opts} = Keyword.pop(opts, :token, nil)
-    {accept, _opts} = Keyword.pop(opts, :accept, "json")
+  def req_stub(name, method, path, opts, fun) do
+    Req.Test.stub(name, fn conn ->
+      {token, opts} = Keyword.pop(opts, :token, nil)
+      {accept, _opts} = Keyword.pop(opts, :accept, "json")
 
-    Bypass.expect(server, fn conn ->
       conn = parse_req_body(conn)
 
       assert conn.method == method
-      assert conn.request_path == path
+      assert is_nil(path) || conn.request_path == path
       assert_accepts(conn, accept)
       assert_token(conn, token)
 
       fun.(conn)
     end)
+  end
+
+  def test_client(context, key) do
+    stub_name = "#{context[:module]}.#{context[:line]}" |> String.downcase()
+    %{request_opts: req_opts} = client = context[key]
+    req_opts = Keyword.put(req_opts, :plug, {Req.Test, stub_name})
+    {%OAuth2.Client{client | request_opts: req_opts}, stub_name}
   end
 
   def unix_now do
@@ -76,9 +81,8 @@ defmodule OAuth2.TestHelpers do
     %{client | token: token}
   end
 
-  def async_client(%{request_opts: req_opts} = client) do
-    async_opts = [async: true, stream_to: self()]
-    %{client | request_opts: Keyword.merge(req_opts, async_opts)}
+  def async_client(%{request_opts: req_opts} = client, fun) do
+    %{client | request_opts: Keyword.put(req_opts, :into, fun)}
   end
 
   defp get_config(key) do

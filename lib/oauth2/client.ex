@@ -106,7 +106,7 @@ defmodule OAuth2.Client do
   * `params` - a map of request parameters
   * `redirect_uri` - the URI the provider should redirect to after authorization
     or token requests
-  * `request_opts` - a keyword list of options passed to the Req module,
+  * `request_opts` - a keyword list of options passed to the `Req` module,
     e.g. `:raw` `:decode_body`, etc.
   * `site` - the OAuth2 provider site host (also known as "issuer")
   * `strategy` - a module that implements the appropriate OAuth2 strategy,

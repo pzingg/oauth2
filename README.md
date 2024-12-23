@@ -50,10 +50,15 @@ for more details.
 
 ## Req http client
 
-The http client library used is [Req](https://github.com/wojtekmach/req). By default, Req uses 
-[Finch](https://github.com/sneako/finch) as the http adapter, via the [run_finch](https://hexdocs.pm/req/Req.Steps.html#run_finch/1) step.
+The http client library used is [Req](https://github.com/wojtekmach/req). 
+By default, Req uses [Finch](https://github.com/sneako/finch) as the http 
+adapter, via the [run_finch](https://hexdocs.pm/req/Req.Steps.html#run_finch/1) 
+step.
 
-Req works by running the request struct through these steps. You can easily reuse or rearrange built-in steps or write new ones. Importantly, steps are just regular functions. Custom steps can be packaged into plugins so that they are even easier to use by others. See [Related Packages](https://github.com/wojtekmach/req?tab=readme-ov-file#related-packages).
+As of Req version 0.5.8, support for async requests requires supplying a 
+function or collectible to the `:into` request option. The `Req.Response.Async`
+implementation (where chunked respose messages are sent to the calling pid)
+is coming in a future release.
 
 ## Debug mode
 

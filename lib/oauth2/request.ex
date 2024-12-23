@@ -18,39 +18,40 @@ defmodule OAuth2.Request do
     headers = req_headers(client, headers) |> normalize_headers() |> Enum.uniq()
     content_type = content_type(headers)
     serializer = Client.get_serializer(client, content_type)
-    body = encode_request_body(body, content_type, serializer)
     headers = process_request_headers(headers, content_type)
-
-    opts =
-      client.request_opts
-      |> Keyword.merge(opts)
-      |> Keyword.merge(
-        url: url,
-        method: method,
-        headers: headers,
-        body: body
-      )
+    body = encode_request_body(body, content_type, serializer)
 
     if Application.get_env(:oauth2, :debug) do
+      params = Keyword.get(opts, :params, [])
+
       Logger.debug("""
         OAuth2 Provider Request
         url: #{inspect(url)}
+        params: #{inspect(params)}
         method: #{inspect(method)}
         headers: #{inspect(headers)}
         body: #{inspect(body)}
       """)
     end
 
+    opts =
+      client.request_opts
+      |> Keyword.merge(opts)
+      |> Keyword.merge(url: url, method: method, headers: headers, body: body)
+
     case Req.request(opts, decode_body: false) do
-      {:ok, %Req.Response{status: status, headers: resp_headers, body: body}} when is_binary(body) ->
+      {:ok, %Req.Response{status: status, headers: resp_headers, body: body}}
+      when is_binary(body) ->
         process_body(client, status, resp_headers, body)
 
-      # %Req.Response.Async{} or decoded map
-      {:ok, %Req.Response{body: ref}} ->
+      # When released we will support Req.Response.Async struct here
+      # For now, for async calls, ref will be a function.
+      {:ok, %Req.Response{body: ref}} when is_function(ref) ->
         {:ok, ref}
 
       {:error, exc} ->
-        {:error, %Error{reason: Exception.message(exc)}}
+        reason = Exception.message(exc) |> String.capitalize()
+        {:error, %Error{reason: reason}}
     end
   end
 
@@ -98,7 +99,7 @@ defmodule OAuth2.Request do
     resp = Response.new(client, status, headers, body)
 
     cond do
-      "error" in resp.body ->
+      is_map(resp.body) && Map.has_key?(resp.body, "error") ->
         {:error, resp}
 
       is_integer(status) && status in 200..399 ->
@@ -106,7 +107,7 @@ defmodule OAuth2.Request do
 
       true ->
         {:error, resp}
-      end
+    end
   end
 
   defp req_headers(%Client{token: nil} = client, headers),
@@ -134,8 +135,9 @@ defmodule OAuth2.Request do
   defp encode_request_body("", _, _), do: ""
   defp encode_request_body([], _, _), do: ""
 
-  defp encode_request_body(body, "application/x-www-form-urlencoded", _),
-    do: URI.encode_query(body)
+  defp encode_request_body(body, "application/x-www-form-urlencoded", _) do
+    URI.encode_query(body)
+  end
 
   defp encode_request_body(body, _mime, nil) do
     body

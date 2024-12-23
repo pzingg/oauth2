@@ -1,5 +1,30 @@
 # Changelog
 
+## v2.2.0 (2024-12-22)
+
+### Improvements
+
+- `scope` and `subject` fields are parsed from the received JWT into the 
+  `AccessToken` struct.
+- A new `JWK` module provides functions for creating various JWK signing
+  keys.
+- A new `DPop` module provides functions for creating a `DPoP` token
+  used for the `DPoP` request header.
+- To support DPoP requests, these fields are added to the `Client` struct:
+  `par_url`, `subject`, `dpop_private_jwk`, and `dpop_nonce`. `subject` value
+  is set to the `subject` parsed in the `AccessToken`.
+- If `client_secret` is omitted, `Client.basic_auth/1` does not send an
+  `"Authorization Basic"` header.
+- `Response.new/4` now accepts an anonymous arity-1 function as the first 
+  argument as well as a `Client` to serialize responses.
+
+### Backward Incompatible Changes
+
+- Using [Req](https://github.com/wojtekmach/req) library for http requests (and 
+  its default `Finch` adapter), replacing `Tesla`, so some request options
+  have changed. Also, `Bypass` mocks replaced with `Req.Test` functions.
+- Requires Elixir version 1.17 or above.
+
 ## v2.1.0 (2022-11-29)
 
 ### Improvements
