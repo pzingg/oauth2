@@ -18,8 +18,8 @@ defmodule OAuth2.AccessToken do
   @type refresh_token :: binary | nil
   @type expires_at :: integer
   @type token_type :: binary
-  @type scope :: binary
-  @type sub :: binary
+  @type scope :: binary | nil
+  @type sub :: binary | nil
   @type other_params :: %{binary => binary}
   @type body :: binary | map | list
 

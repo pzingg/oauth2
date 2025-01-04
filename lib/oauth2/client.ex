@@ -52,6 +52,7 @@ defmodule OAuth2.Client do
   @type par_url :: binary | nil
   @type subject :: binary | nil
   @type nonce :: binary | nil
+  @type private_jwk :: JOSE.JWK.t() | nil
 
   @type t :: %Client{
           authorize_url: authorize_url,
@@ -70,7 +71,7 @@ defmodule OAuth2.Client do
           token_url: token_url,
           par_url: par_url,
           subject: subject,
-          dpop_private_jwk: OAuth2.JWK.jwk_map(),
+          dpop_private_jwk: private_jwk,
           dpop_nonce: nonce
         }
 

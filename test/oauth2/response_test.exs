@@ -1,7 +1,7 @@
 defmodule OAuth2.ResponseTest do
   use ExUnit.Case, async: false
 
-  alias OAuth2.Response
+  alias OAuth2.{Request, Response}
 
   import ExUnit.CaptureLog
 
@@ -28,5 +28,11 @@ defmodule OAuth2.ResponseTest do
     client = OAuth2.Client.put_serializer(%OAuth2.Client{}, "text/plain", Jason)
     response = Response.new(client, 200, [{"content-type", "text/plain"}], ~S({"hello": "world"}))
     assert response.body == %{"hello" => "world"}
+  end
+
+  test "converts Req response headers" do
+    headers = %{"accept" => ["text/html", "text/plain"]}
+    headers = Request.to_header_list(headers)
+    assert headers == [{"accept", "text/html"}, {"accept", "text/plain"}]
   end
 end

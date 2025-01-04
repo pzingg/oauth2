@@ -14,6 +14,9 @@ defmodule OAuth2.Response do
   import OAuth2.Util
   alias OAuth2.Client
 
+  @type serializer_fn :: (binary -> module | nil)
+  @type serializer :: Client.t() | serializer_fn
+
   @type status_code :: integer
   @type headers :: [{binary, binary}]
   @type body :: binary | map | list
@@ -26,10 +29,8 @@ defmodule OAuth2.Response do
 
   defstruct status_code: nil, headers: [], body: nil
 
-  @type serializer_fn :: (binary -> module | nil)
-
   @doc false
-  @spec new(Client.t() | serializer_fn, integer, headers, body) :: t
+  @spec new(serializer, integer, headers, body) :: t
   def new(client, code, headers, body) do
     headers = process_headers(headers)
     content_type = content_type(headers)
