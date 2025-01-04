@@ -31,7 +31,7 @@ defmodule OAuth2.DPoP do
   (NIST "P-256" curve).
   """
   @spec proof(JOSE.JWK.t() | nil, String.t(), Keyword.t()) ::
-          {:ok, binary(), map(), map()} | {:error, String.t()}
+          {:ok, {binary(), map(), map()}} | {:error, String.t()}
   def proof(private_jwk, url, opts \\ [])
 
   def proof(%JOSE.JWK{fields: %{"use" => "sig", "alg" => alg}} = private_jwk, url, opts) do
