@@ -42,7 +42,6 @@ defmodule OAuth2.Request do
     case Req.request(opts, decode_body: false) do
       {:ok, %Req.Response{status: status, headers: resp_headers, body: body}}
       when is_binary(body) ->
-        resp_headers = to_header_list(resp_headers)
         process_body(client, status, resp_headers, body)
 
       # When released we will support Req.Response.Async struct here
@@ -54,13 +53,6 @@ defmodule OAuth2.Request do
         reason = Exception.message(exc) |> String.capitalize()
         {:error, %Error{reason: reason}}
     end
-  end
-
-  @spec to_header_list(%{optional(binary()) => [binary()]}) :: [{binary(), binary()}]
-  def to_header_list(headers) do
-    headers
-    |> Enum.map(fn {k, value_list} -> Enum.map(value_list, &{k, &1}) end)
-    |> List.flatten()
   end
 
   @doc """
@@ -104,6 +96,7 @@ defmodule OAuth2.Request do
   end
 
   def process_body(client, status, headers, body) when is_binary(body) do
+    headers = to_header_list(headers)
     resp = Response.new(client, status, headers, body)
 
     cond do
@@ -116,6 +109,13 @@ defmodule OAuth2.Request do
       true ->
         {:error, resp}
     end
+  end
+
+  @spec to_header_list(%{optional(binary()) => [binary()]}) :: [{binary(), binary()}]
+  def to_header_list(headers) do
+    headers
+    |> Enum.map(fn {k, value_list} -> Enum.map(value_list, &{k, &1}) end)
+    |> List.flatten()
   end
 
   defp req_headers(%Client{token: nil} = client, headers),
