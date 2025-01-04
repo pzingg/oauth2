@@ -47,10 +47,10 @@ defmodule OAuth2.Mixfile do
       {:plug_cowboy, "~> 1.0", only: :test},
 
       # Tools
-      {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      # {:dialyxir, ">= 0.0.0", only: [:dev], runtime: false},
-      # {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
-      {:excoveralls, ">= 0.0.0", only: [:test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.36", only: [:dev], runtime: false},
+      {:excoveralls, "~> 0.18", only: [:test], runtime: false}
     ]
   end
 

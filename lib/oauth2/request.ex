@@ -113,9 +113,9 @@ defmodule OAuth2.Request do
 
   @spec to_header_list(%{optional(binary()) => [binary()]}) :: [{binary(), binary()}]
   def to_header_list(headers) do
-    headers
-    |> Enum.map(fn {k, value_list} -> Enum.map(value_list, &{k, &1}) end)
-    |> List.flatten()
+    for {k, value_list} <- headers, v <- value_list do
+      {k, v}
+    end
   end
 
   defp req_headers(%Client{token: nil} = client, headers),
